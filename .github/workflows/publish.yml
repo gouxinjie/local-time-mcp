@@ -6,22 +6,27 @@ on:
     tags:
       - "v*"
 
+permissions:
+  contents: write
+
 jobs:
   publish:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
 
     steps:
-      - name: 检出代码
+      # 检出默认分支（main）而不是 detached 的 tag，
+      # 这样后续把版本号变更 push 回 main 时才不会因 detached HEAD 失败
+      - name: 检出 main 分支
         uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
 
       - name: 设置 Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 20
           registry-url: https://registry.npmjs.org/
-          # 仅发布时使用 npmjs 源，install 走默认即可
 
       - name: 安装依赖
         run: npm ci
@@ -51,4 +56,4 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add package.json package-lock.json server.js
           git commit -m "chore: release v${GITHUB_REF_NAME#v}" || echo "无需提交"
-          git push
+          git push origin main
