@@ -2,8 +2,8 @@
   "mcpServers": {
     "local-time": {
       "type": "stdio",
-      "command": "python",
-      "args": ["C:/Users/xinjie/WorkBuddy/2026-08-06-08-28-44/local-time-mcp/server.py"]
+      "command": "node",
+      "args": ["D:/MyProjects/local-time-mcp/server.js"]
     }
   }
 }

@@ -1,2 +1,0 @@
-# MCP Python SDK 2.0+ （注意：1.x 与 2.x 的 API 不兼容，2.0 中将 FastMCP 更名为 MCPServer）
-mcp>=2.0.0

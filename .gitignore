@@ -1,15 +1,10 @@
-# Python
+# Python（历史遗留缓存，已不再使用但仍可能被生成）
 __pycache__/
 *.py[cod]
-*$py.class
-*.so
-.Python
-venv/
-env/
-.venv
-*.egg-info/
-dist/
-build/
+
+# Node.js
+node_modules/
+npm-debug.log*
 
 # IDE
 .vscode/

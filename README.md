@@ -1,16 +1,19 @@
-# Local Time MCP Server
+# Local Time MCP Server (Node.js)
 
 一个用于学习 MCP（Model Context Protocol）的入门级 Server，提供本地时间相关的工具。
 
 ## 这是什么？
 
 MCP 是一种让 AI 助手（如 WorkBuddy/CodeBuddy、Claude Desktop 等）调用外部工具的协议。
-这个项目演示了**从零编写一个 MCP Server → 配置到 AI 助手 → 实际使用**的完整流程。
+这个项目演示了**从零编写一个 Node.js MCP Server → 配置到 AI 助手 → 实际使用**的完整流程。
+
+MCP 是语言无关的协议（stdio 传输 = 标准输入输出 + JSON-RPC）。本仓库使用官方
+`@modelcontextprotocol/sdk` 实现。
 
 ```
 ┌─────────────┐     stdio      ┌─────────────────┐
 │  AI 助手     │ ←───────────→ │  MCP Server      │
-│ (WorkBuddy)  │   JSON-RPC     │  (server.py)     │
+│ (WorkBuddy)  │   JSON-RPC     │  (server.js)     │
 │              │                │                  │
 │  "现在几点？" │ ──调用工具──→ │  get_current_time│
 │              │ ←─返回结果───  │  ()              │
@@ -30,28 +33,30 @@ MCP 是一种让 AI 助手（如 WorkBuddy/CodeBuddy、Claude Desktop 等）调�
 
 ### 1. 安装依赖
 
-> ⚠️ 本项目使用 **MCP Python SDK 2.0+**，其中 `FastMCP` 已更名为 `MCPServer`。
-> 2.0 会升级 `starlette`/`pyjwt`/`protobuf` 等依赖，可能与你已有的 fastapi、streamlit、
-> zhipuai 等包产生冲突警告。**建议用虚拟环境隔离**：
+需要 Node.js 18+ 环境（已安装 Node 20 亦可）。
 
 ```bash
 cd local-time-mcp
-python -m venv .venv
-.venv\Scripts\activate        # Windows 激活虚拟环境
-pip install -r requirements.txt
+npm install              # 安装 @modelcontextprotocol/sdk
 ```
-
-若直接用全局 Python 安装（`pip install -r requirements.txt`），冲突只是警告，MCP Server 本身可正常运行。
 
 ### 2. 直接测试（不走 MCP 协议）
 
 ```bash
-python test_server.py
+npm test                 # 等价于 node test_server.js
 ```
 
-这会直接调用工具函数，验证逻辑是否正确。
+这会直接调用工具逻辑，验证功能是否正确。
 
-### 3. 配置到 WorkBuddy / CodeBuddy
+### 3. 启动 MCP Server
+
+```bash
+node server.js
+```
+
+MCP Client 会作为子进程启动它；你也可以直接运行以查看是否报错。
+
+## 配置到 WorkBuddy / CodeBuddy
 
 编辑 MCP 配置文件 `~/.workbuddy/mcp.json`（不存在则新建），添加：
 
@@ -59,22 +64,25 @@ python test_server.py
 {
   "mcpServers": {
     "local-time": {
-      "command": "python",
-      "args": ["C:/Users/xinjie/WorkBuddy/2026-08-06-08-28-44/local-time-mcp/server.py"]
+      "type": "stdio",
+      "command": "node",
+      "args": ["D:/MyProjects/local-time-mcp/server.js"]
     }
   }
 }
 ```
 
-> **注意**：如果你的 `python` 不在 PATH 中，请用完整路径，如 `"command": "C:/Users/xinjie/.workbuddy/binaries/python/versions/3.13.12/python.exe"`
+> **注意**：
+> - `args` 中的 `server.js` 路径**必须替换为你在本机克隆/存放该项目的实际路径**。
+> - 如果你的 `node` 不在 PATH 中，请用完整路径，如 `"command": "D:/Software/Node/node.exe"`。
 
-### 4. 信任并启用
+## 信任并启用
 
 1. 打开 WorkBuddy，进入右上角**连接器管理**页面
 2. 找到 `local-time` 连接器，点击 **Trust**（信任）
 3. 现在你可以在对话中使用它了！
 
-### 5. 试试看
+## 试试看
 
 在 WorkBuddy 中直接问：
 - "现在本地几点了？"
@@ -91,7 +99,7 @@ python test_server.py
 cd local-time-mcp
 git init
 git add .
-git commit -m "Initial commit: local time MCP server"
+git commit -m "Initial commit: local time MCP server (Node.js)"
 
 # 在 GitHub 上创建仓库后
 git remote add origin https://github.com/<你的用户名>/local-time-mcp.git
@@ -103,7 +111,7 @@ git push -u origin main
 
 其他人（或你在另一台机器上）克隆后，只需：
 
-1. `pip install -r requirements.txt`
+1. `npm install`
 2. 把 `mcp_config_example.json` 中的路径改成克隆后的实际路径
 3. 写入 `~/.workbuddy/mcp.json`
 
@@ -111,9 +119,9 @@ git push -u origin main
 
 ```
 local-time-mcp/
-├── server.py               # MCP Server 主程序（核心）
-├── test_server.py          # 工具函数测试脚本（不走 MCP 协议）
-├── requirements.txt        # Python 依赖
+├── server.js               # MCP Server 主程序（核心）
+├── test_server.js          # 工具逻辑测试脚本（不走 MCP 协议）
+├── package.json            # Node 依赖与脚本（npm start / npm test）
 ├── mcp_config_example.json # WorkBuddy/CodeBuddy 配置示例
 ├── .gitignore
 └── README.md
@@ -122,9 +130,9 @@ local-time-mcp/
 ## MCP 协议工作原理（简要）
 
 ```
-1. 启动：WorkBuddy 根据 mcp.json 中的 command+args 启动 server.py 子进程
+1. 启动：WorkBuddy 根据 mcp.json 中的 command+args 启动 server.js 子进程
 2. 握手：通过 stdin/stdout 交换 JSON-RPC 消息，完成 initialize 握手
-3. 发现：WorkBuddy 发送 tools/list 请求，Server 返回所有 @mcp.tool() 注册的工具
+3. 发现：WorkBuddy 发送 tools/list 请求，Server 返回所有 server.tool() 注册的工具
 4. 调用：用户提问 → LLM 判断需要调用哪个工具 → WorkBuddy 发送 tools/call
         → Server 执行对应函数 → 返回结果 → LLM 整合后回复用户
 5. 退出：WorkBuddy 关闭时，子进程自动终止
@@ -137,3 +145,4 @@ local-time-mcp/
 - 增加 Resource：暴露一个时间相关的只读资源
 - 增加 Prompt：预设一些时间相关的 prompt 模板
 - 切换传输方式：从 stdio 改为 SSE（Server-Sent Events）支持远程访问
+- 发布为 npm 包，即可用 `npx local-time-mcp-server@latest` 一键运行

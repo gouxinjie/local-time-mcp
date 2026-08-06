@@ -1,0 +1,21 @@
+{
+  "name": "local-time-mcp-server",
+  "version": "1.0.0",
+  "description": "A local time MCP server written in Node.js. Provides current time, timezone time, time formatting, and time difference tools.",
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node test_server.js"
+  },
+  "keywords": [
+    "mcp",
+    "time",
+    "timezone",
+    "model-context-protocol"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.30.0"
+  }
+}
