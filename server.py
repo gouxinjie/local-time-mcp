@@ -10,16 +10,17 @@ Local Time MCP Server
 MCP 通信协议：stdio（标准输入输出）
 """
 
-from mcp.server.fastmcp import FastMCP
+from mcp.server.mcpserver import MCPServer
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 import json
 
 # ============================================================
 # 1. 创建 MCP Server 实例
-#    FastMCP 是官方提供的高层封装，几行代码就能跑起来
+#    MCPServer 是官方提供的高层封装（mcp 2.0 中由 FastMCP 更名而来），
+#    几行代码就能跑起来
 # ============================================================
-mcp = FastMCP("local-time-server")
+mcp = MCPServer("local-time-server")
 
 
 # ============================================================

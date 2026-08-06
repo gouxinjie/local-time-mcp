@@ -30,10 +30,18 @@ MCP 是一种让 AI 助手（如 WorkBuddy/CodeBuddy、Claude Desktop 等）调�
 
 ### 1. 安装依赖
 
+> ⚠️ 本项目使用 **MCP Python SDK 2.0+**，其中 `FastMCP` 已更名为 `MCPServer`。
+> 2.0 会升级 `starlette`/`pyjwt`/`protobuf` 等依赖，可能与你已有的 fastapi、streamlit、
+> zhipuai 等包产生冲突警告。**建议用虚拟环境隔离**：
+
 ```bash
 cd local-time-mcp
+python -m venv .venv
+.venv\Scripts\activate        # Windows 激活虚拟环境
 pip install -r requirements.txt
 ```
+
+若直接用全局 Python 安装（`pip install -r requirements.txt`），冲突只是警告，MCP Server 本身可正常运行。
 
 ### 2. 直接测试（不走 MCP 协议）
 
