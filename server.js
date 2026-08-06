@@ -1,3 +1,5 @@
+#!/usr/bin/env node
+
 /**
  * Local Time MCP Server (Node.js)
  * ===============================
@@ -302,7 +304,7 @@ function timeDiffBetween(start, end, unit) {
 // ============================================================
 // 1. 创建 MCP Server 实例
 // ============================================================
-const server = new McpServer({ name: "local-time-server", version: "1.0.0" });
+const server = new McpServer({ name: "local-time-server", version: "1.0.1" });
 
 // ============================================================
 // 2. 注册 Tool
