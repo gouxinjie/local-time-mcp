@@ -26,10 +26,9 @@ jobs:
         with:
           node-version: ${{ matrix.node-version }}
 
-      # 升级 npm 以支持 lockfileVersion 3（Node 18 早期自带的 npm 8 不支持）
-      - name: 升级 npm
-        run: npm install -g npm@latest
-
+      # 不升级 npm：npm@latest 的 engines 只支持 Node 22+，
+      # 在 Node 18/20 上强行升级会导致后续 npm ci 失败。
+      # setup-node 自带的 npm（Node 18.16+/20 自带 npm 9+/10）已支持 lockfileVersion 3。
       - name: 安装依赖
         run: npm ci
 
