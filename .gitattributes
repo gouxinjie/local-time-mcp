@@ -1,0 +1,8 @@
+# 强制这些文件在任意平台（含 Windows）检出时使用 LF 换行，
+# 保证 bin 入口的 shebang（#!/usr/bin/env node）不含 \r，跨平台可直接执行。
+server.js          text eol=lf
+*.sh               text eol=lf
+.github/workflows/* text eol=lf
+
+# 其余文本文件使用仓库默认（不做 CRLF 强制转换，避免 Windows 下 git 自动改行尾）
+*                   text=auto

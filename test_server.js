@@ -65,6 +65,10 @@ try {
   check("非法日期抛错", true);
 }
 
+console.log("\n[5.2] formatWallClock - 星期名称 %A / %a");
+s = formatWallClock(2026, 8, 6, 8, 28, 0, "UTC", "%A/%a");
+check("长名称 %A == Thursday", s === "Thursday/Thu", s);
+
 // --- time_diff ---
 console.log("\n" + "=".repeat(60));
 console.log("[6] timeDiffBetween - 天数差");
@@ -79,6 +83,10 @@ check("diff == 3600", r.diff === 3600, r.diff);
 console.log("\n[7.1] timeDiffBetween - 无时区(naive)输入");
 r = JSON.parse(timeDiffBetween("2026-01-01 00:00:00", "2026-01-02 00:00:00", "hours"));
 check("diff == 24", r.diff === 24, r.diff);
+
+console.log("\n[7.1b] timeDiffBetween - 纯日期(naive)按 UTC 处理");
+r = JSON.parse(timeDiffBetween("2026-01-01", "2026-01-02", "hours"));
+check("纯日期 diff == 24", r.diff === 24, r.diff);
 
 console.log("\n[7.2] timeDiffBetween - 非法时间格式");
 try {

@@ -8,15 +8,27 @@ on:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    # 跨平台矩阵：在 macOS / Windows / Ubuntu 上跑测试，
+    # 覆盖 engines 声明的最低版本到当前主流 LTS（Node 18/20/22），
+    # 提前发现不同操作系统（路径分隔符、npx、换行符等）导致的兼容问题。
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        node-version: [18, 20, 22]
     steps:
       - name: 检出代码
         uses: actions/checkout@v4
 
-      - name: 设置 Node.js
+      - name: 设置 Node.js ${{ matrix.node-version }}
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: ${{ matrix.node-version }}
+
+      # 升级 npm 以支持 lockfileVersion 3（Node 18 早期自带的 npm 8 不支持）
+      - name: 升级 npm
+        run: npm install -g npm@latest
 
       - name: 安装依赖
         run: npm ci

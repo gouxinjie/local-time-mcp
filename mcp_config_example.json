@@ -2,8 +2,8 @@
   "mcpServers": {
     "local-time": {
       "type": "stdio",
-      "command": "node",
-      "args": ["D:/MyProjects/local-time-mcp/server.js"]
+      "command": "npx",
+      "args": ["local-time-mcp-server@latest"]
     }
   }
 }

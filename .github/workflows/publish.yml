@@ -22,10 +22,11 @@ jobs:
           ref: main
           fetch-depth: 0
 
+      # 使用当前 LTS（22）发布；engines 声明 >=18，发布环境用较新 LTS 更稳妥
       - name: 设置 Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           registry-url: https://registry.npmjs.org/
 
       - name: 安装依赖

@@ -14,6 +14,8 @@
  * 依赖：@modelcontextprotocol/sdk（见 package.json）
  */
 
+import { realpathSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
@@ -22,8 +24,21 @@ import { z } from "zod";
 // 辅助函数
 // ============================================================
 
-/** 是否由本模块作为入口直接运行（供测试脚本复用内部函数）。 */
-const isMain = process.argv[1] && process.argv[1].endsWith("server.js");
+/**
+ * 是否由本模块作为入口直接运行（供测试脚本复用内部函数）。
+ * 用 import.meta.url 与 process.argv[1] 比对，并做 realpath 归一化，
+ * 避免因 macOS 符号链接（npm bin 软链）或 Windows 路径差异导致误判。
+ */
+const isMain = (() => {
+  if (!process.argv[1]) return false;
+  try {
+    const entry = realpathSync(process.argv[1]);
+    const self = realpathSync(fileURLToPath(import.meta.url));
+    return entry === self;
+  } catch {
+    return false;
+  }
+})();
 
 /** 判断传入的时区参数是否表示“本地时间”。 */
 function isLocalTz(tz) {
@@ -197,6 +212,13 @@ function strftime(date, fmt, timeZone) {
   const weekday = part("weekday");
   const monthLong = part("monthName");
 
+  // 星期几的缩写（如 "Mon"），直接交给 Intl 生成，避免手写映射表。
+  // 与 %A 的"长名称"（如 "Monday"）分开获取，互不依赖。
+  const weekdayShort =
+    new Intl.DateTimeFormat("en-US", { weekday: "short", timeZone }).formatToParts(date).find(
+      (x) => x.type === "weekday"
+    )?.value ?? "";
+
   // 时区缩写与偏移
   let tzAbbr = "";
   let tzOffset = "";
@@ -225,9 +247,6 @@ function strftime(date, fmt, timeZone) {
   const monthIndex = Number(month) - 1;
   const monthName = monthNames[monthIndex] || monthLong;
 
-  const weekdays = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
-  const abbrevWeekdays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-
   // 用占位符避免误替换，再逐项替换
   let out = fmt;
   const map = {
@@ -240,7 +259,7 @@ function strftime(date, fmt, timeZone) {
     "%M": minute,
     "%S": second,
     "%A": weekday,
-    "%a": abbrevWeekdays[weekdays.indexOf(weekday)] || weekday,
+    "%a": weekdayShort,
     "%B": monthName,
     "%b": monthName.slice(0, 3),
     "%Z": tzAbbr,
@@ -255,19 +274,32 @@ function strftime(date, fmt, timeZone) {
   return out.split("\u0000").join("%");
 }
 
+/**
+ * 将输入解析为 UTC 毫秒时间戳。
+ * - 带时区的 ISO 8601（如 '2026-01-01T00:00:00+08:00'）：按实际偏移解析；
+ * - 不带时区的输入（如 '2026-01-01' 或 '2026-01-01 00:00:00'）：统一按 UTC 解析，
+ *   避免因运行机器本机时区不同导致结果不一致。
+ */
+function parseTimeInput(s) {
+  const str = String(s).trim();
+  // 纯日期（YYYY-MM-DD）或日期+时间但无时区/偏移 → 视为 UTC，补 Z
+  const naiveDate = /^\d{4}-\d{2}-\d{2}$/.test(str);
+  const naiveDateTime = /^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}(:\d{2}(\.\d+)?)?$/.test(str);
+  const input = naiveDate || naiveDateTime ? `${str}Z` : str;
+
+  const d = new Date(input);
+  if (Number.isNaN(d.getTime())) {
+    throw new Error(
+      `时间格式非法：'${s}'，请使用 ISO 8601 格式，如 '2026-01-01T00:00:00+08:00'`
+    );
+  }
+  return d.getTime();
+}
+
 /** 计算两个时间差，支持带/不带时区。 */
 function timeDiffBetween(start, end, unit) {
-  const parse = (s) => {
-    const d = new Date(s);
-    if (Number.isNaN(d.getTime())) {
-      throw new Error(
-        `时间格式非法：'${s}'，请使用 ISO 8601 格式，如 '2026-01-01T00:00:00+08:00'`
-      );
-    }
-    return d.getTime();
-  };
-  const s = parse(start);
-  const e = parse(end);
+  const s = parseTimeInput(start);
+  const e = parseTimeInput(end);
   const totalMs = e - s;
   const totalSeconds = totalMs / 1000;
 
