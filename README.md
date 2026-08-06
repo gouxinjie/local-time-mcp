@@ -2,6 +2,10 @@
 
 一个用于学习 MCP（Model Context Protocol）的入门级 Server，提供本地时间相关的工具。
 
+> 📖 **MCP 文档：**
+> - [docs/mcp核心概念.md](docs/mcp核心概念.md) —— MCP 是什么：角色、原语、真实报文、设计思想
+> - [docs/mcp端到端流程.md](docs/mcp端到端流程.md) —— MCP 怎么发生：从配置到关闭的完整流程
+
 ## 这是什么？
 
 MCP 是一种让 AI 助手（如 WorkBuddy/CodeBuddy、Claude Desktop 等）调用外部工具的协议。
@@ -123,6 +127,9 @@ local-time-mcp/
 ├── test_server.js          # 工具逻辑测试脚本（不走 MCP 协议）
 ├── package.json            # Node 依赖与脚本（npm start / npm test）
 ├── mcp_config_example.json # WorkBuddy/CodeBuddy 配置示例
+├── docs/
+│   ├── mcp核心概念.md          # MCP 是什么：角色、原语、真实报文、设计思想
+│   └── mcp端到端流程.md        # MCP 怎么发生：从配置到关闭的完整流程
 ├── .gitignore
 └── README.md
 ```
