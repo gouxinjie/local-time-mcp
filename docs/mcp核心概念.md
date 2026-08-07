@@ -4,10 +4,7 @@
 >
 > 本文是 MCP 的**概念篇**，讲"是什么"：角色、原语、传输方式、真实报文、设计思想。
 > 想看完整生命周期怎么串起来，见姊妹篇 [mcp端到端流程.md](mcp端到端流程.md)。
->
-> 全部内容对照官方规范（协议版本 `2024-11-05`），并给出官方链接。
 
----
 
 ## 1. 一句话理解 MCP
 
@@ -17,30 +14,51 @@ MCP 解决的痛点是：**大模型（LLM）本身只会"说话"，不会执行
 - 对 LLM 而言，MCP 相当于 **USB-C 接口**：任何支持这个标准的"外设"（工具、数据源）都能即插即用。
 - 对开发者而言，MCP 是 **"AI 的 USB 标准"**：写一次 Server，就能被所有支持 MCP 的 AI 助手复用。
 
-**架构长什么样？**
+> 一句话总结：**LLM 负责"想"，MCP 负责"做"**。LLM 通过 MCP 把意图翻译成对工具的调用，拿到结果后继续推理，最终把答案讲给你听。
+
+**架构 + 流程一张图看懂（角色分层 + 数据往返）**
 
 ```text
-你（用户）
- ↓
-大模型（LLM）—— 负责理解意图、决定要不要调工具
- ↓
-MCP Client —— 发起请求、管理上下文
- ↓
-MCP Server —— 提供具体能力、执行真实逻辑
- ↓
-外部系统 —— 数据库、GitHub、文件、企业 API
+        ┌─────────────────────┐
+        │       你（用户）      │
+        └──────────┬──────────┘
+                   │ ① 提问「帮我查一下上个月的销售数据」
+                   ▼
+  ╔═════════════════════════════════════════════════════╗
+  ║                      HOST (AI 应用，如 CodeBuddy)     ║
+  ║                                                     ║
+  ║   ┌─────────────────────┐                           ║
+  ║   │      大模型 LLM      │  ② 理解意图：需要查数据库     ║
+  ║   └──────────┬──────────┘                           ║
+  ║              │ ③ 决定调用工具，按 MCP 协议发起请求      ║
+  ║              ▼                                      ║
+  ║   ┌─────────────────────┐                           ║
+  ║   │      MCP Client     │  ← 协议连接器，替 LLM       ║
+  ║   └──────────┬──────────┘    跟某个 Server 一对一通信  ║
+  ║              │ ④ JSON-RPC (stdio/HTTP)              ║
+  ╚══════════════╪══════════════════════════════════════╝
+                 ▼
+        ┌─────────────────────┐
+        │      MCP Server     │  ⑤ 执行真实逻辑
+        └──────────┬──────────┘
+                   │ ⑥ 调用/查询
+                   ▼
+        ┌─────────────────────┐
+        │      外部系统        │  ← 数据库、GitHub、文件、企业 API
+        └──────────┬──────────┘
+                   │ ⑦ 数据沿 MCP 原路返回
+                   ▼
+        ┌─────────────────────┐
+        │      大模型 LLM      │  ⑧ 拿到结果继续推理
+        └──────────┬──────────┘     （回到 Host 内的 LLM）
+                   │ ⑨ 整理成你想要的格式
+                   ▼
+        ┌─────────────────────┐
+        │       你（用户）      │  ← 获得答案
+        └─────────────────────┘
 ```
 
-**工作流程也很直观**
-
-```text
-1. 你说"帮我查一下上个月的销售数据"
-2. LLM 理解了：需要查数据库
-3. 通过 MCP Client 发请求给 MCP Server
-4. MCP Server 执行 SQL 查询
-5. 数据返回给 LLM
-6. LLM 整理成你想要的格式输出
-```
+---
 
 ## 2. 三个角色（别搞混）
 
@@ -48,28 +66,49 @@ MCP Server —— 提供具体能力、执行真实逻辑
 
 | 角色 | 官方定义 | 在本案例中 | 职责 |
 |------|---------|-----------|------|
-| **Host** | LLM 应用程序，**发起连接**的一方 | **CodeBuddy**（整个程序） | 初始化连接、启动/关闭 server 子进程、管理会话、**管理用户授权与数据访问**、整合结果 |
+| **Host** | LLM 应用程序，**发起连接**的一方 | **CodeBuddy**（整个程序） | 初始化连接、启动/关闭 server 子进程（stdio 模式）、管理会话、**管理用户授权与数据访问**、整合结果 |
 | **Client** | 宿主应用内的**连接器**，与某个 Server **一一对应** | **CodeBuddy 内部针对 `local-time` 的 Client** | 与 server.js 一对一通信：发请求、收响应、翻译协议（tools/list、tools/call 都是它发的） |
 | **Server** | 提供上下文和能力的服务 | **`server.js`**（本项目） | 暴露 Resources/Prompts/Tools，监听 stdin、执行工具、经 stdout 返回 |
 
 ```
-┌─────────────┐   协议    ┌─────────────┐
-│    Host     │ ────────→ │    Client   │ ── stdio/HTTP ──→ │  Server    │
-│  (AI 应用)   │ 请求/响应  │ (协议客户端)  │                   │ (工具提供方) │
-└─────────────┘           └─────────────┘                   └─────────────┘
-     ↑  LLM 在 Host 内运行，      ↑ 每个 Server 对应一个 Client
+                        ┌───────────────────────────────────────────────┐
+                        │                   HOST                        │
+                        │               (CodeBuddy, AI 应用)             │
+                        │                                               │
+                        │   ┌─────────────┐       ┌──────────────────┐  │
+                        │   │    LLM      │ 决策  │   MCP Client     │  │
+                        │   │  (大模型)    │──────▶│  (协议连接器)      │  │
+                        │   └─────────────┘       └────────┬─────────┘  │
+                        └───────────────────────────────────┼──────────┘
+                                                            │  JSON-RPC 2.0
+                                                            │  (stdio / Streamable HTTP)
+                                                            ▼
+                                                ┌─────────────────────┐
+                                                │     MCP Server      │
+                                                │   (server.js)       │
+                                                │  Tools/Resources/   │
+                                                │  Prompts            │
+                                                └──────────┬──────────┘
+                                                           │  调用
+                                                           ▼
+                                                ┌─────────────────────┐
+                                                │    外部系统          │
+                                                │  (文件/DB/GitHub/API) │
+                                                └─────────────────────┘
 ```
 
 ### 2.2 关键澄清
 
 - **CodeBuddy 不是 Client，它是 Host。** Client 是 Host 内部的组件。
 - 一个 Host（CodeBuddy）可以**同时**管理多个 Client，每个 Client 连一个 Server（比如 `local-time`、`TDesign` 各一个）。
-- **Server 是 Host 启动的子进程**，运行在 Host 所在的机器上。
+- **stdio 模式下，Server 是 Host 启动的子进程**，运行在 Host 所在的机器上；而 Streamable HTTP 模式下，Server 是独立常驻的服务进程，不隶属于 Host（详见 4.1 传输方式）。
 - 官方规范强调：**Host 负责用户授权与数据访问控制**——比如工具调用（代表任意代码执行）需先获得用户同意，这也是 CodeBuddy 里需要"Trust（信任）"连接器的原因。
 
 ---
 
 ## 3. 核心原语（Primitives）
+
+> 先澄清一个易混淆点：`@modelcontextprotocol/sdk` 同时提供 **Server 端**（`McpServer`）和 **Client 端**（`Client`）的 API。**本仓库 `server.js` 只用到 Server 端**，用来暴露工具给 Host 调用；Client 端则是 Host（如 CodeBuddy）内部用来连 Server 的。所以当你"写一个 MCP Server"时，只需要接触 Server 端 API——协议里那句"一个 Client 对一个 Server"，Server 端只需要做好自己的本分。
 
 MCP 围绕三类能力展开，称为 **Primitives**——Server 暴露给 LLM 的"能力入口"。
 
@@ -84,7 +123,7 @@ MCP 围绕三类能力展开，称为 **Primitives**——Server 暴露给 LLM �
 - **特点**：由 **LLM 决定是否调用**（Model-controlled）。
 - **使用模式**：`tools/list`（发现）→ `tools/call`（调用）→ 返回结果。
 
-本项目 4 个工具的定义方式：
+本项目 4 个工具的定义方式（`get_current_time`、`format_time`、`time_diff`、`list_timezones`），结构一致，以 `get_current_time` 为例：
 
 ```javascript
 server.tool(
@@ -139,7 +178,7 @@ stdio 的"三件套"在 Node SDK 中：
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 
-const server = new McpServer({ name: "local-time-server", version: "1.0.0" });
+const server = new McpServer({ name: "local-time-server", version: "1.0.4" });
 const transport = new StdioServerTransport();
 await server.connect(transport);
 ```
@@ -154,21 +193,31 @@ stdio（标准输入输出）是**操作系统给每个进程默认配备的三�
 | 标准输出 | **stdout** | 程序**输出**数据 | 写出 JSON-RPC 响应 |
 | 标准错误 | **stderr** | 程序**输出错误**信息 | 打印日志（不参与协议） |
 
-在 MCP 里，**Server 是被 Host 作为"子进程"启动的**。Host 的 Client 和 Server 子进程之间，就通过这一根 stdin 和一根 stdout 连线：
+在 **stdio** 传输下，**Server 是被 Host 作为"子进程"启动的**。Host 的 Client 和 Server 子进程之间，就通过这一根 stdin 和一根 stdout 连线：
 
 ```
-    client 进程                 server.js 子进程
-        │                             │
-        │── 往子进程的 stdin 写入 ────→│   (读请求)
-        │   {"id":2,"method":"tools/list"...}
-        │                             │   处理工具逻辑
-        │←── 从子进程的 stdout 读取 ──│   (写响应)
-        │   {"id":2,"result":{"tools":[...]}}
+   ┌──────────────┐                              ┌──────────────┐
+   │  client 进程  │                              │ server.js 子进程│
+   └──────┬───────┘                              └──────┬───────┘
+          │                                            │
+          │ ① 往 Server 的 stdin 写入（请求）            │
+          │───────────────────────────────────────────▶│
+          │    {"id":2,"method":"tools/list","params":{}}│
+          │                                            │
+          │                                            │ ② 处理工具逻辑
+          │                                            │   （发现有哪些工具）
+          │ ③ 从 Server 的 stdout 读取（响应）           │
+          │◀───────────────────────────────────────────│
+          │    {"id":2,"result":{"tools":[...]}}       │
+          │                                            │
+          ▼                                            ▼
 ```
 
-- **写请求** = 往 Server 的 **stdin** 里 `write` 一行 JSON。
-- **读响应** = 监听 Server 的 **stdout**，按换行切分出一行行 JSON。
+- **写请求** = 往 Server 的 **stdin** 里 `write` 一个 JSON 消息。
+- **读响应** = 监听 Server 的 **stdout**，按换行切分出一条条 JSON 消息。
 - **每条消息**以 `jsonrpc`、`id`（请求与响应用 `id` 对应）、`method`、`result`/`error` 这些字段组成 —— 这就是 **JSON-RPC 2.0**。
+
+> 注：JSON 本身允许跨行，但 MCP 的 stdio 实现（`StdioServerTransport`）约定**按换行符分隔消息**，即"一行一条消息"（`readline` 逐行读取），因此发送方需把每条消息序列化后放在同一行。
 
 `StdioServerTransport` 这个类，做的正是"往 stdin 读、往 stdout 写、按行切分 JSON、用 id 匹配请求响应"这些琐事。
 
@@ -185,7 +234,7 @@ stdio（标准输入输出）是**操作系统给每个进程默认配备的三�
 ```json
 {"jsonrpc":"2.0","id":1,"method":"initialize","params":{
   "protocolVersion":"2024-11-05","capabilities":{},
-  "clientInfo":{"name":"my-app","version":"1.0.0"}
+  "clientInfo":{"name":"my-app","version":"1.0.4"}
 }}
 ```
 
@@ -195,7 +244,7 @@ stdio（标准输入输出）是**操作系统给每个进程默认配备的三�
 {"result":{
   "protocolVersion":"2024-11-05",
   "capabilities":{"tools":{"listChanged":true}},
-  "serverInfo":{"name":"local-time-server","version":"1.0.0"}
+  "serverInfo":{"name":"local-time-server","version":"1.0.4"}
 },"jsonrpc":"2.0","id":1}
 ```
 
@@ -298,4 +347,4 @@ LLM 需要能**程序化判断**调用是否成功。返回结构化 JSON（而�
 - **工具规范（tools/list、tools/call）**：<https://modelcontextprotocol.io/specification/2024-11-05/server/tools>
 - **客户端功能（Sampling）**：<https://modelcontextprotocol.io/specification/2024-11-05/client/>
 
-> 注：MCP 仍在演进，各版本规范有差异。本项目使用 Node SDK `@modelcontextprotocol/sdk`，其默认支持的协议版本为 `2024-11-05`。若官方有更新的版本，可对比相应子页。
+> 注：MCP 仍在演进，各版本规范有差异。本文锚定 `2024-11-05` 撰写，链接也指向该版本；本项目使用的 Node SDK `@modelcontextprotocol/sdk`（1.30）在握手时会协商并实际采用更新的协议版本 `2025-06-18`。两者在本文涉及的握手流程、`tools/list`、`tools/call` 上行为一致，故不影响理解。若需对照最新规范，可将上方链接中的 `2024-11-05` 替换为 `2025-06-18`。
